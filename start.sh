@@ -67,9 +67,9 @@ echo "📍 Admin: http://localhost:3000/admin"
 echo "======================================"
 echo ""
 echo "🔐 테스트 계정:"
-echo "   관리자: admin@companionanimals.com / admin123"
-echo "   제공자: provider@test.com / provider123"
-echo "   입양자: adopter@test.com / adopter123"
+echo "   이메일: test@example.com"
+echo "   비밀번호: Test123456"
+echo "   (회원가입하거나 위 계정으로 로그인 가능)"
 echo ""
 echo "⏹️  종료하려면 Ctrl+C를 누르세요"
 echo ""
@@ -80,7 +80,7 @@ cd "$PROJECT_DIR"
 # Backend 서버 실행 (백그라운드)
 echo "🔥 Backend 서버 시작..."
 cd "$PROJECT_DIR/backend"
-npm start &
+PORT=5001 npm run dev &
 BACKEND_PID=$!
 
 # 잠시 대기
@@ -98,6 +98,12 @@ cleanup() {
     echo "🛑 서버들을 종료하는 중..."
     kill $BACKEND_PID 2>/dev/null
     kill $FRONTEND_PID 2>/dev/null
+    
+    # 추가 정리
+    pkill -f "next" 2>/dev/null
+    pkill -f "nodemon" 2>/dev/null
+    pkill -f "server.js" 2>/dev/null
+    
     echo "✅ 모든 서버가 종료되었습니다"
     exit 0
 }
