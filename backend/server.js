@@ -81,6 +81,7 @@ app.get('/', (req, res) => {
 // API 라우트들 설정
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pets', require('./routes/pets'));
+app.use('/api/chat', require('./routes/chat'));
 // app.use('/api/users', require('./routes/users'));
 // app.use('/api/adoptions', require('./routes/adoptions'));
 
