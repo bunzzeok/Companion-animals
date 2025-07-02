@@ -1,6 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
+// Force dynamic rendering for admin page
+export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { 
   Users, 
@@ -88,6 +91,11 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+
+  // Event handlers
+  const handleTabChange = useCallback((tabId: 'overview' | 'users' | 'pets' | 'reports') => {
+    setActiveTab(tabId);
+  }, []);
 
   // Load admin data
   useEffect(() => {
@@ -288,7 +296,7 @@ export default function AdminDashboard() {
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
+                    onClick={() => handleTabChange(tab.id as any)}
                     className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                       activeTab === tab.id
                         ? 'border-blue-500 text-blue-600'

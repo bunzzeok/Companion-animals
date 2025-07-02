@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable static export for Capacitor mobile apps
-  output: 'export',
+  // Enable static export for Capacitor mobile apps (disabled for development)
+  // output: 'export',
   
   // Disable image optimization for static export
   images: {
@@ -18,10 +18,7 @@ const nextConfig: NextConfig = {
   },
   
   // Trailing slash for better mobile compatibility
-  trailingSlash: true,
-  
-  // Disable server-side features for static export
-  distDir: 'out',
+  trailingSlash: false, // CORS 문제 해결을 위해 false로 변경
   
   // Asset prefix for mobile apps
   assetPrefix: process.env.NODE_ENV === 'production' ? '/' : '',
@@ -39,6 +36,37 @@ const nextConfig: NextConfig = {
   // Experimental features for mobile optimization
   experimental: {
     optimizePackageImports: ['lucide-react'],
+  },
+  
+  // API 프록시 설정 (개발 환경에서만)
+  async rewrites() {
+    if (process.env.NODE_ENV === 'development') {
+      return [
+        {
+          source: '/api/:path*',
+          destination: 'http://localhost:5001/api/:path*',
+        },
+      ];
+    }
+    return [];
+  },
+
+  // CORS 헤더 설정 (개발 환경에서만)
+  async headers() {
+    if (process.env.NODE_ENV === 'development') {
+      return [
+        {
+          source: '/api/:path*',
+          headers: [
+            { key: 'Access-Control-Allow-Credentials', value: 'false' },
+            { key: 'Access-Control-Allow-Origin', value: '*' },
+            { key: 'Access-Control-Allow-Methods', value: 'GET,POST,PUT,DELETE,OPTIONS,PATCH' },
+            { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization' },
+          ],
+        },
+      ];
+    }
+    return [];
   },
   
   // Webpack configuration for mobile builds

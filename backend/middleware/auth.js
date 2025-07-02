@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+const User = require('../models/User');
 
 // JWT 토큰 생성 함수
 const generateToken = (userId) => {
@@ -324,5 +324,6 @@ module.exports = {
   validateResetToken,
   rateLimitByUser,
   checkBlacklist,
-  blacklistToken
+  blacklistToken,
+  protect: authenticate // alias for convenience
 };

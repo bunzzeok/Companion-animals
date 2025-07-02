@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Heart, Mail, Lock, Eye, EyeOff, User, Phone, MapPin } from "lucide-react";
+import { authAPI, apiUtils } from "../../lib/api";
 
 // 회원가입 페이지 컴포넌트 - 당근마켓 스타일
 export default function RegisterPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -96,17 +99,22 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      // TODO: API 호출 구현
-      console.log('Register attempt:', formData);
+      // API 호출하여 회원가입 처리
+      const response = await authAPI.register({
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        phone: formData.phone,
+        userType: formData.userType,
+      });
+
+      // 회원가입 성공 후 로그인 페이지로 리다이렉트
+      router.push('/login?message=registration-success');
       
-      // 임시 딜레이
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // 회원가입 성공 후 리다이렉트
-      // router.push('/login');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Register error:', error);
-      setErrors({ general: '회원가입에 실패했습니다. 다시 시도해주세요.' });
+      const errorMessage = apiUtils.getErrorMessage(error);
+      setErrors({ general: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -144,8 +152,8 @@ export default function RegisterPage() {
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 가입 목적을 선택해주세요
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className={`flex items-center p-4 border rounded-lg cursor-pointer transition-all ${
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className={`flex items-center p-5 border rounded-xl cursor-pointer transition-all touch-manipulation min-h-[80px] ${
                   formData.userType === 'adopter' 
                     ? 'border-orange-500 bg-orange-50' 
                     : 'border-gray-300 hover:border-gray-400'
@@ -165,7 +173,7 @@ export default function RegisterPage() {
                   </div>
                 </label>
                 
-                <label className={`flex items-center p-4 border rounded-lg cursor-pointer transition-all ${
+                <label className={`flex items-center p-5 border rounded-xl cursor-pointer transition-all touch-manipulation min-h-[80px] ${
                   formData.userType === 'provider' 
                     ? 'border-orange-500 bg-orange-50' 
                     : 'border-gray-300 hover:border-gray-400'
@@ -202,10 +210,12 @@ export default function RegisterPage() {
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors ${
+                  className={`w-full pl-10 pr-4 py-4 text-base border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors touch-manipulation ${
                     errors.email ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="이메일을 입력하세요"
+                  autoComplete="email"
+                  inputMode="email"
                 />
               </div>
               {errors.email && (
@@ -228,15 +238,17 @@ export default function RegisterPage() {
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors ${
+                  className={`w-full pl-10 pr-12 py-4 text-base border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors touch-manipulation ${
                     errors.password ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="비밀번호를 입력하세요"
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center min-h-[44px] min-w-[44px] justify-center touch-manipulation"
+                  aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -265,15 +277,17 @@ export default function RegisterPage() {
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors ${
+                  className={`w-full pl-10 pr-12 py-4 text-base border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors touch-manipulation ${
                     errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="비밀번호를 다시 입력하세요"
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center min-h-[44px] min-w-[44px] justify-center touch-manipulation"
+                  aria-label={showConfirmPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -302,10 +316,11 @@ export default function RegisterPage() {
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors ${
+                  className={`w-full pl-10 pr-4 py-4 text-base border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors touch-manipulation ${
                     errors.name ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="이름을 입력하세요"
+                  autoComplete="name"
                 />
               </div>
               {errors.name && (
@@ -328,10 +343,12 @@ export default function RegisterPage() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors ${
+                  className={`w-full pl-10 pr-4 py-4 text-base border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors touch-manipulation ${
                     errors.phone ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="전화번호를 입력하세요"
+                  autoComplete="tel"
+                  inputMode="tel"
                 />
               </div>
               {errors.phone && (
@@ -354,7 +371,7 @@ export default function RegisterPage() {
                     name="city"
                     value={formData.city}
                     onChange={handleInputChange}
-                    className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors ${
+                    className={`w-full pl-10 pr-4 py-4 text-base border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors touch-manipulation appearance-none bg-white ${
                       errors.city ? 'border-red-500' : 'border-gray-300'
                     }`}
                   >
@@ -392,10 +409,11 @@ export default function RegisterPage() {
                   name="district"
                   value={formData.district}
                   onChange={handleInputChange}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors ${
+                  className={`w-full px-4 py-4 text-base border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors touch-manipulation ${
                     errors.district ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="구/군 입력"
+                  autoComplete="address-level2"
                 />
                 {errors.district && (
                   <p className="mt-1 text-sm text-red-600">{errors.district}</p>
@@ -412,12 +430,12 @@ export default function RegisterPage() {
                   type="checkbox"
                   checked={formData.agreement}
                   onChange={handleInputChange}
-                  className={`h-4 w-4 text-orange-500 focus:ring-orange-500 border-gray-300 rounded mt-1 ${
+                  className={`h-5 w-5 text-orange-500 focus:ring-orange-500 border-gray-300 rounded mt-1 touch-manipulation ${
                     errors.agreement ? 'border-red-500' : ''
                   }`}
                 />
-                <div className="ml-3 text-sm">
-                  <label htmlFor="agreement" className="text-gray-900">
+                <div className="ml-3 text-sm sm:text-base">
+                  <label htmlFor="agreement" className="text-gray-900 cursor-pointer">
                     <Link href="/terms" className="text-orange-500 hover:text-orange-600 font-medium">
                       이용약관
                     </Link>
@@ -438,10 +456,10 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all ${
+              className={`w-full py-4 px-4 rounded-xl font-semibold text-base text-white transition-all touch-manipulation min-h-[48px] ${
                 isLoading 
                   ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-orange-500 hover:bg-orange-600 transform hover:scale-105'
+                  : 'bg-orange-500 hover:bg-orange-600 active:bg-orange-700 transform hover:scale-[1.02] active:scale-[0.98]'
               }`}
             >
               {isLoading ? (

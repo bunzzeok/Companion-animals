@@ -6,20 +6,46 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
 const path = require('path');
+const { createServer } = require('http');
+const { Server: SocketIO } = require('socket.io');
 require('dotenv').config();
 
 // Express 앱 인스턴스 생성
 const app = express();
 
-// 환경 변수에서 PORT를 가져오거나 기본값 5000 사용
-const PORT = process.env.PORT || 5000;
+// HTTP 서버 생성 (Socket.IO를 위해)
+const server = createServer(app);
+
+// Socket.IO 서버 설정
+const io = new SocketIO(server, {
+  cors: {
+    origin: [
+      process.env.CLIENT_URL || 'http://localhost:3000',
+      'http://localhost:3001', // Next.js dev server alternative port
+      'http://127.0.0.1:3000',
+      '*' // 개발 환경에서는 모든 origin 허용
+    ],
+    credentials: true,
+    methods: ["GET", "POST"]
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['polling', 'websocket'],
+  allowEIO3: true
+});
+
+// 환경 변수에서 PORT를 가져오거나 기본값 3001 사용 (5000은 macOS AirPlay가 사용)
+const PORT = process.env.PORT || 3001;
 
 // 보안 헤더 설정을 위한 helmet 미들웨어 사용
 app.use(helmet());
 
 // CORS 설정 - 프론트엔드에서 API 접근 허용
 app.use(cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000', // 클라이언트 URL 설정
+    origin: [
+        process.env.CLIENT_URL || 'http://localhost:3000',
+        'http://localhost:3001' // Next.js dev server alternative port
+    ],
     credentials: true // 쿠키와 인증 정보 허용
 }));
 
@@ -69,21 +95,82 @@ const connectDB = async () => {
 // 데이터베이스 연결 실행
 connectDB();
 
+// Socket.IO 채팅 설정
+const { setupChatSocket } = require('./socket/chatSocket');
+setupChatSocket(io);
+
+// Socket.IO 인스턴스를 글로벌하게 사용할 수 있도록 설정
+global.io = io;
+app.set('io', io);
+
 // 기본 라우트 - API 상태 확인용
 app.get('/', (req, res) => {
     res.json({ 
         message: 'Companion Animals API is running!',
         version: '1.0.0',
-        status: 'active'
+        status: 'active',
+        socketConnections: io.engine.clientsCount
     });
+});
+
+// Socket.IO 연결 테스트 엔드포인트
+app.get('/test-socket', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Socket.IO Test</title>
+        </head>
+        <body>
+            <h1>Socket.IO Connection Test</h1>
+            <div id="status">Connecting...</div>
+            <div id="messages"></div>
+            <script src="/socket.io/socket.io.js"></script>
+            <script>
+                const socket = io('http://localhost:5001', {
+                    transports: ['polling', 'websocket'],
+                    upgrade: true
+                });
+                
+                const status = document.getElementById('status');
+                const messages = document.getElementById('messages');
+                
+                socket.on('connect', () => {
+                    status.textContent = 'Connected! Socket ID: ' + socket.id + ' Transport: ' + socket.io.engine.transport.name;
+                    status.style.color = 'green';
+                });
+                
+                socket.on('connect_error', (error) => {
+                    status.textContent = 'Connection Error: ' + error.message;
+                    status.style.color = 'red';
+                    console.error('Socket connection error:', error);
+                });
+                
+                socket.on('disconnect', (reason) => {
+                    status.textContent = 'Disconnected: ' + reason;
+                    status.style.color = 'orange';
+                });
+                
+                socket.io.on('upgrade', () => {
+                    status.textContent += ' -> Upgraded to: ' + socket.io.engine.transport.name;
+                });
+            </script>
+        </body>
+        </html>
+    `);
 });
 
 // API 라우트들 설정
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pets', require('./routes/pets'));
 app.use('/api/chat', require('./routes/chat'));
-// app.use('/api/users', require('./routes/users'));
-// app.use('/api/adoptions', require('./routes/adoptions'));
+app.use('/api/community', require('./routes/community'));
+app.use('/api/comments', require('./routes/comments'));
+app.use('/api/adoptions', require('./routes/adoptions'));
+app.use('/api/about', require('./routes/about'));
+
+// 업로드 에러 처리 미들웨어
+app.use(require('./middleware/upload').handleUploadError);
 
 // 존재하지 않는 라우트에 대한 404 에러 처리
 app.use('*', (req, res) => {
@@ -103,11 +190,12 @@ app.use((error, req, res, next) => {
     });
 });
 
-// 서버 시작
-app.listen(PORT, () => {
+// 서버 시작 (Socket.IO와 함께)
+server.listen(PORT, () => {
     console.log(`🚀 Server is running on port ${PORT}`);
     console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🌐 Server URL: http://localhost:${PORT}`);
+    console.log(`💬 Socket.IO server is ready`);
 });
 
 // 프로세스 종료 시 MongoDB 연결 정리

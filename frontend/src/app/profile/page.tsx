@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
   User, 
@@ -74,6 +74,11 @@ export default function ProfilePage() {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'settings'>('overview');
+
+  // Event handlers
+  const handleTabChange = useCallback((tab: 'overview' | 'activity' | 'settings') => {
+    setActiveTab(tab);
+  }, []);
 
   // Load profile data
   useEffect(() => {
@@ -364,7 +369,7 @@ export default function ProfilePage() {
                   {['overview', 'activity', 'settings'].map((tab) => (
                     <button
                       key={tab}
-                      onClick={() => setActiveTab(tab as any)}
+                      onClick={() => handleTabChange(tab as any)}
                       className={`py-2 px-1 border-b-2 font-medium text-sm capitalize transition-colors ${
                         activeTab === tab
                           ? 'border-orange-500 text-orange-600'

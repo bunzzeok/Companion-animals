@@ -1,10 +1,14 @@
+'use client'
+
 import Link from 'next/link';
 import { Heart, ArrowLeft, Upload, Plus, X, MapPin, Phone, Mail } from 'lucide-react';
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 // 분양등록 페이지 컴포넌트
 export default function PostPetPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6">
@@ -462,6 +466,7 @@ export default function PostPetPage() {
           </div>
         </div>
       </main>
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

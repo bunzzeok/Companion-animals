@@ -14,8 +14,8 @@ const petSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Pet type is required'], // 동물 종류 필수
     enum: {
-      values: ['cat', 'dog', 'other'],
-      message: 'Pet type must be cat, dog, or other'
+      values: ['cat', 'dog', 'bird', 'rabbit', 'other'],
+      message: 'Pet type must be cat, dog, bird, rabbit, or other'
     }
   },
   

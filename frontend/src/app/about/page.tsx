@@ -1,8 +1,121 @@
+'use client'
+
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { Heart, ArrowLeft, Users, Target, Award, Shield, MapPin, Mail, Phone, Globe } from 'lucide-react';
+import { aboutAPI, apiUtils } from '../../lib/api';
+
+// 인터페이스 정의
+interface CompanyStatistics {
+  adoptions: number;
+  families: number;
+  shelters: number;
+  support: string;
+}
+
+interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  description: string;
+  expertise: string;
+  profileImage?: string;
+}
+
+interface HistoryMilestone {
+  id: string;
+  date: string;
+  title: string;
+  description: string;
+}
+
+interface CompanyInfo {
+  mission: string;
+  vision: string;
+  values: Array<{
+    title: string;
+    description: string;
+    icon: string;
+  }>;
+  contact: {
+    address: string;
+    phone: string;
+    email: string;
+    website: string;
+  };
+}
 
 // 회사소개 페이지 컴포넌트
 export default function AboutPage() {
+  // State management
+  const [statistics, setStatistics] = useState<CompanyStatistics>({
+    adoptions: 500,
+    families: 1200,
+    shelters: 50,
+    support: '24/7'
+  });
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [history, setHistory] = useState<HistoryMilestone[]>([]);
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load about page data
+  useEffect(() => {
+    const loadAboutData = async () => {
+      try {
+        setLoading(true);
+        
+        // Load all about data in parallel
+        const [statsResponse, teamResponse, historyResponse, companyResponse] = await Promise.all([
+          aboutAPI.getStatistics(),
+          aboutAPI.getTeamMembers(),
+          aboutAPI.getHistory(),
+          aboutAPI.getCompanyInfo()
+        ]);
+
+        // Update statistics
+        if (apiUtils.isSuccess(statsResponse)) {
+          const statsData = apiUtils.getData(statsResponse);
+          setStatistics(statsData);
+        }
+
+        // Update team members
+        if (apiUtils.isSuccess(teamResponse)) {
+          const teamData = apiUtils.getData(teamResponse) || [];
+          setTeamMembers(teamData);
+        } else {
+          setTeamMembers([]);
+        }
+
+        // Update history
+        if (apiUtils.isSuccess(historyResponse)) {
+          const historyData = apiUtils.getData(historyResponse) || [];
+          setHistory(historyData);
+        } else {
+          setHistory([]);
+        }
+
+        // Update company info
+        if (apiUtils.isSuccess(companyResponse)) {
+          const companyData = apiUtils.getData(companyResponse);
+          setCompanyInfo(companyData);
+        }
+
+      } catch (error) {
+        console.error('Failed to load about data:', error);
+        
+        // Set empty data on error
+        setTeamMembers([]);
+        setHistory([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAboutData();
+  }, []);
+
+
   return (
     <div className="min-h-screen bg-white">
       {/* 헤더 */}
@@ -93,24 +206,35 @@ export default function AboutPage() {
               </div>
               
               <div className="bg-gray-50 rounded-3xl p-8">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-orange-500 mb-2">500+</div>
-                    <div className="text-gray-600 text-sm">성공한 입양</div>
+                {loading ? (
+                  <div className="grid grid-cols-2 gap-6">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                      <div key={index} className="text-center">
+                        <div className="h-8 bg-gray-200 rounded animate-pulse mb-2"></div>
+                        <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3 mx-auto"></div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-orange-500 mb-2">1,200+</div>
-                    <div className="text-gray-600 text-sm">행복한 가족</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-orange-500 mb-2">{statistics.adoptions}+</div>
+                      <div className="text-gray-600 text-sm">성공한 입양</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-orange-500 mb-2">{statistics.families.toLocaleString()}+</div>
+                      <div className="text-gray-600 text-sm">행복한 가족</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-orange-500 mb-2">{statistics.shelters}+</div>
+                      <div className="text-gray-600 text-sm">협력 보호소</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-orange-500 mb-2">{statistics.support}</div>
+                      <div className="text-gray-600 text-sm">상담 지원</div>
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-orange-500 mb-2">50+</div>
-                    <div className="text-gray-600 text-sm">협력 보호소</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-orange-500 mb-2">24/7</div>
-                    <div className="text-gray-600 text-sm">상담 지원</div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -171,58 +295,46 @@ export default function AboutPage() {
               </p>
             </div>
             
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[
-                {
-                  name: "김동물",
-                  role: "대표이사 & 창립자",
-                  description: "15년간 동물보호 활동을 해온 베테랑. 더 체계적인 입양 시스템을 만들기 위해 회사를 설립했습니다.",
-                  expertise: "동물보호, 정책개발"
-                },
-                {
-                  name: "박기술",
-                  role: "CTO",
-                  description: "안전하고 사용하기 쉬운 플랫폼을 구축하여 더 많은 동물들이 가족을 찾을 수 있도록 돕고 있습니다.",
-                  expertise: "웹개발, UX/UI"
-                },
-                {
-                  name: "이돌봄",
-                  role: "동물복지 전문가",
-                  description: "수의학 박사 출신으로 입양 전후 케어와 동물 건강 상담을 담당하고 있습니다.",
-                  expertise: "수의학, 동물행동학"
-                },
-                {
-                  name: "최마케팅",
-                  role: "마케팅 디렉터",
-                  description: "더 많은 사람들에게 입양의 의미를 알리고, 따뜻한 캠페인을 기획하고 있습니다.",
-                  expertise: "마케팅, 브랜딩"
-                },
-                {
-                  name: "한지원",
-                  role: "고객지원팀장",
-                  description: "입양자와 제공자 모두가 만족할 수 있는 서비스를 위해 최선을 다하고 있습니다.",
-                  expertise: "고객상담, 케어매니지먼트"
-                },
-                {
-                  name: "서커뮤니티",
-                  role: "커뮤니티 매니저",
-                  description: "건전하고 활발한 커뮤니티 운영을 통해 입양 문화를 발전시키고 있습니다.",
-                  expertise: "커뮤니티 운영, 콘텐츠"
-                }
-              ].map((member, index) => (
-                <div key={index} className="bg-gray-50 rounded-xl p-6 text-center">
-                  <div className="bg-orange-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
-                    <Users className="h-10 w-10 text-orange-500" />
+            {loading ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="bg-gray-50 rounded-xl p-6 text-center">
+                    <div className="bg-gray-200 rounded-full w-20 h-20 mx-auto mb-4 animate-pulse"></div>
+                    <div className="h-5 bg-gray-200 rounded animate-pulse mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse mb-3 w-2/3 mx-auto"></div>
+                    <div className="h-16 bg-gray-200 rounded animate-pulse mb-3"></div>
+                    <div className="h-6 bg-gray-200 rounded-full animate-pulse w-1/2 mx-auto"></div>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{member.name}</h3>
-                  <p className="text-orange-500 font-medium text-sm mb-3">{member.role}</p>
-                  <p className="text-gray-600 text-sm mb-3 leading-relaxed">{member.description}</p>
-                  <div className="text-xs text-gray-500 bg-white rounded-full px-3 py-1 inline-block">
-                    {member.expertise}
+                ))}
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {teamMembers.map((member) => (
+                  <div key={member.id} className="bg-gray-50 rounded-xl p-6 text-center">
+                    <div className="bg-orange-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4 overflow-hidden">
+                      {member.profileImage ? (
+                        <img 
+                          src={apiUtils.getImageUrl(member.profileImage)}
+                          alt={member.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                      ) : null}
+                      <Users className={`h-10 w-10 text-orange-500 ${member.profileImage ? 'hidden' : ''}`} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{member.name}</h3>
+                    <p className="text-orange-500 font-medium text-sm mb-3">{member.role}</p>
+                    <p className="text-gray-600 text-sm mb-3 leading-relaxed">{member.description}</p>
+                    <div className="text-xs text-gray-500 bg-white rounded-full px-3 py-1 inline-block">
+                      {member.expertise}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -240,52 +352,39 @@ export default function AboutPage() {
               {/* 타임라인 라인 */}
               <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-0.5 bg-orange-200 transform md:-translate-x-0.5"></div>
               
-              <div className="space-y-8">
-                {[
-                  {
-                    date: "2024.01",
-                    title: "Companion Animals 설립",
-                    description: "동물보호에 대한 열정으로 회사를 설립하고 서비스 개발을 시작했습니다."
-                  },
-                  {
-                    date: "2024.03",
-                    title: "베타 버전 출시",
-                    description: "초기 베타 테스터들과 함께 서비스를 개선하며 사용자 피드백을 수집했습니다."
-                  },
-                  {
-                    date: "2024.06",
-                    title: "정식 서비스 런칭",
-                    description: "웹과 모바일 앱을 통한 정식 서비스를 시작했습니다."
-                  },
-                  {
-                    date: "2024.09",
-                    title: "첫 100건 입양 달성",
-                    description: "플랫폼을 통해 100마리의 동물이 새 가족을 찾았습니다."
-                  },
-                  {
-                    date: "2024.12",
-                    title: "커뮤니티 기능 추가",
-                    description: "사용자 간 소통과 정보 공유를 위한 커뮤니티 기능을 출시했습니다."
-                  },
-                  {
-                    date: "2025.현재",
-                    title: "지속적인 성장",
-                    description: "더 많은 동물들이 따뜻한 가정을 찾을 수 있도록 서비스를 확장하고 있습니다."
-                  }
-                ].map((milestone, index) => (
-                  <div key={index} className={`relative flex items-center ${index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'}`}>
-                    {/* 타임라인 포인트 */}
-                    <div className="absolute left-4 md:left-1/2 w-3 h-3 bg-orange-500 rounded-full transform md:-translate-x-1.5 md:-translate-y-0.5 z-10"></div>
-                    
-                    {/* 컨텐츠 */}
-                    <div className={`bg-white rounded-xl p-6 shadow-sm ml-12 md:ml-0 ${index % 2 === 0 ? 'md:mr-8 md:ml-0 md:w-5/12' : 'md:ml-8 md:mr-0 md:w-5/12'}`}>
-                      <div className="text-orange-500 font-semibold text-sm mb-2">{milestone.date}</div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">{milestone.title}</h3>
-                      <p className="text-gray-600 text-sm leading-relaxed">{milestone.description}</p>
+              {loading ? (
+                <div className="space-y-8">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className={`relative flex items-center ${index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'}`}>
+                      {/* 타임라인 포인트 */}
+                      <div className="absolute left-4 md:left-1/2 w-3 h-3 bg-gray-300 rounded-full transform md:-translate-x-1.5 md:-translate-y-0.5 z-10 animate-pulse"></div>
+                      
+                      {/* 컨텐츠 */}
+                      <div className={`bg-white rounded-xl p-6 shadow-sm ml-12 md:ml-0 ${index % 2 === 0 ? 'md:mr-8 md:ml-0 md:w-5/12' : 'md:ml-8 md:mr-0 md:w-5/12'}`}>
+                        <div className="h-4 bg-gray-200 rounded animate-pulse mb-2 w-1/3"></div>
+                        <div className="h-5 bg-gray-200 rounded animate-pulse mb-2"></div>
+                        <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {history.map((milestone, index) => (
+                    <div key={milestone.id} className={`relative flex items-center ${index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'}`}>
+                      {/* 타임라인 포인트 */}
+                      <div className="absolute left-4 md:left-1/2 w-3 h-3 bg-orange-500 rounded-full transform md:-translate-x-1.5 md:-translate-y-0.5 z-10"></div>
+                      
+                      {/* 컨텐츠 */}
+                      <div className={`bg-white rounded-xl p-6 shadow-sm ml-12 md:ml-0 ${index % 2 === 0 ? 'md:mr-8 md:ml-0 md:w-5/12' : 'md:ml-8 md:mr-0 md:w-5/12'}`}>
+                        <div className="text-orange-500 font-semibold text-sm mb-2">{milestone.date}</div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{milestone.title}</h3>
+                        <p className="text-gray-600 text-sm leading-relaxed">{milestone.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </section>

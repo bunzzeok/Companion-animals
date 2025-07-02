@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { body, validationResult, query } = require('express-validator');
-const { Pet } = require('../models');
+const Pet = require('../models/Pet');
 const { 
   authenticate, 
   authorize, 
@@ -56,8 +56,8 @@ const petValidation = [
     .withMessage('Pet name must be between 1 and 50 characters'),
   
   body('type')
-    .isIn(['cat', 'dog', 'other'])
-    .withMessage('Pet type must be cat, dog, or other'),
+    .isIn(['cat', 'dog', 'bird', 'rabbit', 'other'])
+    .withMessage('Pet type must be cat, dog, bird, rabbit, or other'),
   
   body('breed')
     .trim()
@@ -138,8 +138,8 @@ const searchValidation = [
   
   query('type')
     .optional()
-    .isIn(['cat', 'dog', 'other'])
-    .withMessage('Type must be cat, dog, or other'),
+    .isIn(['cat', 'dog', 'bird', 'rabbit', 'other'])
+    .withMessage('Type must be cat, dog, bird, rabbit, or other'),
   
   query('age')
     .optional()
@@ -279,6 +279,56 @@ router.get('/', optionalAuth, searchValidation, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve pets'
+    });
+  }
+});
+
+// GET /api/pets/featured - Get featured pets
+router.get('/featured', optionalAuth, async (req, res) => {
+  try {
+    const { limit = 8 } = req.query;
+
+    // Get featured pets
+    const featuredPets = await Pet.findFeatured(parseInt(limit))
+      .populate('owner', 'name profileImage location');
+
+    res.json({
+      success: true,
+      data: featuredPets
+    });
+
+    console.log(`✅ Featured pets retrieved: ${featuredPets.length} items`);
+
+  } catch (error) {
+    console.error('Get featured pets error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve featured pets'
+    });
+  }
+});
+
+// GET /api/pets/urgent - Get urgent pets
+router.get('/urgent', optionalAuth, async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    // Get urgent pets
+    const urgentPets = await Pet.findUrgent(parseInt(limit))
+      .populate('owner', 'name profileImage location');
+
+    res.json({
+      success: true,
+      data: urgentPets
+    });
+
+    console.log(`✅ Urgent pets retrieved: ${urgentPets.length} items`);
+
+  } catch (error) {
+    console.error('Get urgent pets error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve urgent pets'
     });
   }
 });
@@ -581,7 +631,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     }
 
     // Check if pet has pending adoptions
-    const { Adoption } = require('../models');
+    const Adoption = require('../models/Adoption');
     const pendingAdoptions = await Adoption.countDocuments({
       pet: id,
       status: { $in: ['pending', 'approved'] }
@@ -731,56 +781,6 @@ router.get('/my/listings', authenticate, authorize('provider'), async (req, res)
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve your pet listings'
-    });
-  }
-});
-
-// GET /api/pets/featured - Get featured pets
-router.get('/featured', optionalAuth, async (req, res) => {
-  try {
-    const { limit = 8 } = req.query;
-
-    // Get featured pets
-    const featuredPets = await Pet.findFeatured(parseInt(limit))
-      .populate('owner', 'name profileImage location');
-
-    res.json({
-      success: true,
-      data: featuredPets
-    });
-
-    console.log(`✅ Featured pets retrieved: ${featuredPets.length} items`);
-
-  } catch (error) {
-    console.error('Get featured pets error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve featured pets'
-    });
-  }
-});
-
-// GET /api/pets/urgent - Get urgent pets
-router.get('/urgent', optionalAuth, async (req, res) => {
-  try {
-    const { limit = 10 } = req.query;
-
-    // Get urgent pets
-    const urgentPets = await Pet.findUrgent(parseInt(limit))
-      .populate('owner', 'name profileImage location');
-
-    res.json({
-      success: true,
-      data: urgentPets
-    });
-
-    console.log(`✅ Urgent pets retrieved: ${urgentPets.length} items`);
-
-  } catch (error) {
-    console.error('Get urgent pets error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve urgent pets'
     });
   }
 });

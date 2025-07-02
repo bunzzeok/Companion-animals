@@ -1,29 +1,264 @@
-import Link from 'next/link';
-import { Heart, ArrowLeft, CheckCircle2, FileText, Phone, MapPin, Calendar, Users, Shield } from 'lucide-react';
+'use client'
 
-// 입양신청 페이지 컴포넌트
-export default function AdoptionPage() {
+import Link from 'next/link';
+import { useState, useCallback } from 'react';
+import { Heart, ArrowLeft, CheckCircle2, FileText, Phone, MapPin, Calendar, Users, Shield, Menu, Search, X, Plus } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
+import NotificationBell from '../../components/NotificationBell';
+import { NotificationProvider } from '../../contexts/NotificationContext';
+
+// 입양신청 페이지 내용 컴포넌트
+function AdoptionContent() {
+  const { isAuthenticated, user, logout, isLoading: authLoading } = useAuth();
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  // Event handlers for mobile menu
+  const handleLogout = useCallback(() => {
+    logout();
+  }, [logout]);
+
+  const handleShowMobileMenu = useCallback(() => {
+    setShowMobileMenu(true);
+  }, []);
+
+  const handleHideMobileMenu = useCallback(() => {
+    setShowMobileMenu(false);
+  }, []);
+
+  const handleMobileLogout = useCallback(() => {
+    logout();
+    setShowMobileMenu(false);
+  }, [logout]);
+
   return (
     <div className="min-h-screen bg-white">
-      {/* 헤더 */}
+      {/* 헤더 네비게이션 - 홈페이지와 동일한 스타일 */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center h-16">
-            {/* 뒤로가기 버튼 */}
-            <Link 
-              href="/" 
-              className="mr-4 p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 text-gray-600" />
-            </Link>
-            
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6">
+          <div className="flex justify-between items-center h-14 sm:h-16">
             {/* 로고 */}
-            <Link href="/" className="flex items-center space-x-2">
-              <Heart className="h-8 w-8 text-orange-500" />
-              <span className="text-xl font-bold text-gray-900">Companion Animals</span>
-            </Link>
+            <div className="flex items-center min-w-0">
+              <Link href="/" className="flex items-center space-x-1 sm:space-x-2">
+                <Heart className="h-6 w-6 sm:h-8 sm:w-8 text-orange-500 flex-shrink-0" />
+                <span className="text-base sm:text-xl font-bold text-gray-900 truncate">
+                  <span className="hidden xs:inline">Companion Animals</span>
+                  <span className="xs:hidden">반려동물</span>
+                </span>
+              </Link>
+            </div>
+            
+            {/* 중앙 네비게이션 - 데스크탑만 */}
+            <nav className="hidden lg:flex space-x-6 xl:space-x-8">
+              <Link href="/pets" className="text-gray-700 hover:text-orange-500 transition-colors font-medium">
+                분양보기
+              </Link>
+              {!authLoading && isAuthenticated && user && (
+                <Link href="/favorites" className="text-gray-700 hover:text-orange-500 transition-colors font-medium">
+                  찜목록
+                </Link>
+              )}
+              <Link href="/adoption" className="text-orange-500 font-medium">
+                입양신청
+              </Link>
+              <Link href="/community" className="text-gray-700 hover:text-orange-500 transition-colors font-medium">
+                커뮤니티
+              </Link>
+              <Link href="/chat" className="text-gray-700 hover:text-orange-500 transition-colors font-medium">
+                채팅
+              </Link>
+              <Link href="/about" className="text-gray-700 hover:text-orange-500 transition-colors font-medium">
+                소개
+              </Link>
+            </nav>
+
+            {/* 우측 버튼들 - 모바일 최적화 */}
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              {!authLoading && (
+                isAuthenticated && user ? (
+                  // 로그인된 상태
+                  <>
+                    {/* 알림 벨 */}
+                    <NotificationBell />
+                    
+                    <span className="hidden sm:block text-gray-700 font-medium">
+                      {user?.name || '사용자'}님
+                    </span>
+                    <button 
+                      onClick={handleLogout}
+                      className="text-gray-700 hover:text-orange-500 transition-colors font-medium text-sm sm:text-base"
+                    >
+                      로그아웃
+                    </button>
+                  </>
+                ) : (
+                  // 로그인되지 않은 상태
+                  <>
+                    <Link 
+                      href="/login" 
+                      className="hidden sm:block text-gray-700 hover:text-orange-500 transition-colors font-medium"
+                    >
+                      로그인
+                    </Link>
+                    <Link 
+                      href="/register" 
+                      className="bg-orange-500 text-white px-3 py-2 sm:px-4 rounded-lg hover:bg-orange-600 transition-colors font-medium text-sm sm:text-base"
+                    >
+                      <span className="hidden sm:inline">회원가입</span>
+                      <span className="sm:hidden">가입</span>
+                    </Link>
+                  </>
+                )
+              )}
+              
+              {/* 모바일 메뉴 버튼 */}
+              <button 
+                onClick={handleShowMobileMenu}
+                className="lg:hidden p-2 text-gray-700 hover:text-orange-500 transition-colors flex items-center justify-center"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
+        {/* 모바일 슬라이드 메뉴 오버레이 */}
+        <div className="lg:hidden">
+          {/* 배경 오버레이 */}
+          <div 
+            className={`fixed inset-0 z-[60] transition-all duration-300 ease-in-out ${
+              showMobileMenu 
+                ? 'bg-black/50 pointer-events-auto opacity-100' 
+                : 'bg-black/0 pointer-events-none opacity-0'
+            }`}
+            onClick={handleHideMobileMenu}
+          />
+          
+          {/* 슬라이드 메뉴 */}
+          <div className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl z-[70] transform transition-transform duration-300 ease-in-out ${
+            showMobileMenu ? 'translate-x-0' : 'translate-x-full'
+          }`}>
+              {/* 메뉴 헤더 */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <div className="flex items-center space-x-2">
+                  <Heart className="h-6 w-6 text-orange-500" />
+                  <span className="text-lg font-bold text-gray-900">메뉴</span>
+                </div>
+                <button 
+                  onClick={handleHideMobileMenu}
+                  className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              {/* 사용자 정보 (로그인된 경우) */}
+              {!authLoading && isAuthenticated && user && (
+                <div className="p-4 border-b border-gray-100 bg-gray-50">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-medium text-sm">
+                        {user?.name?.charAt(0) || '사'}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{user?.name || '사용자'}님</p>
+                      <p className="text-sm text-gray-500">환영합니다!</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* 메뉴 항목들 */}
+              <div className="py-2">
+                <Link 
+                  href="/pets" 
+                  onClick={handleHideMobileMenu}
+                  className="flex items-center px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                >
+                  <Search className="h-5 w-5 mr-3 text-gray-400" />
+                  <span className="font-medium">분양동물 보기</span>
+                </Link>
+                
+                {/* 찜 목록 - 로그인된 사용자만 보이도록 */}
+                {!authLoading && isAuthenticated && user && (
+                  <Link 
+                    href="/favorites" 
+                    onClick={handleHideMobileMenu}
+                    className="flex items-center px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                  >
+                    <Heart className="h-5 w-5 mr-3 text-gray-400 fill-current text-red-500" />
+                    <span className="font-medium">내 찜 목록</span>
+                  </Link>
+                )}
+                
+                <div className="flex items-center px-4 py-3 text-orange-600 bg-orange-50">
+                  <Heart className="h-5 w-5 mr-3 text-orange-500" />
+                  <span className="font-medium">입양신청</span>
+                </div>
+                
+                <Link 
+                  href="/community" 
+                  onClick={handleHideMobileMenu}
+                  className="flex items-center px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                >
+                  <Users className="h-5 w-5 mr-3 text-gray-400" />
+                  <span className="font-medium">커뮤니티</span>
+                </Link>
+                
+                <Link 
+                  href="/chat" 
+                  onClick={handleHideMobileMenu}
+                  className="flex items-center px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                >
+                  <svg className="h-5 w-5 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span className="font-medium">채팅</span>
+                </Link>
+                
+                <Link 
+                  href="/about" 
+                  onClick={handleHideMobileMenu}
+                  className="flex items-center px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                >
+                  <svg className="h-5 w-5 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="font-medium">소개</span>
+                </Link>
+              </div>
+              
+              {/* 하단 버튼들 */}
+              <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
+                {!authLoading && (
+                  isAuthenticated && user ? (
+                    <button 
+                      onClick={handleMobileLogout}
+                      className="w-full py-3 px-4 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                    >
+                      로그아웃
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <Link 
+                        href="/login" 
+                        onClick={handleHideMobileMenu}
+                        className="block w-full py-3 px-4 text-center border border-orange-500 text-orange-500 rounded-lg font-medium hover:bg-orange-50 transition-colors"
+                      >
+                        로그인
+                      </Link>
+                      <Link 
+                        href="/register" 
+                        onClick={handleHideMobileMenu}
+                        className="block w-full py-3 px-4 text-center bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+                      >
+                        회원가입
+                      </Link>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
@@ -292,5 +527,14 @@ export default function AdoptionPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// 래퍼 컴포넌트
+export default function AdoptionPage() {
+  return (
+    <NotificationProvider>
+      <AdoptionContent />
+    </NotificationProvider>
   );
 }

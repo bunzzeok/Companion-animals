@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Heart, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
 
 // 로그인 페이지 컴포넌트 - 당근마켓 스타일
 export default function LoginPage() {
+  const router = useRouter();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -31,25 +35,31 @@ export default function LoginPage() {
     setErrors({});
 
     try {
-      // TODO: API 호출 구현
-      console.log('Login attempt:', formData);
+      console.log('🔄 로그인 시도:', { email: formData.email });
       
-      // 임시 딜레이
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // useAuth 훅의 login 함수 사용
+      const result = await login(formData.email, formData.password);
+
+      if (result.success) {
+        console.log('✅ 로그인 성공:', result.data);
+        // 로그인 성공 후 메인 페이지로 리다이렉트
+        router.push('/');
+      } else {
+        console.error('❌ 로그인 실패:', result.error);
+        setErrors({ general: result.error || '로그인에 실패했습니다.' });
+      }
       
-      // 로그인 성공 후 리다이렉트
-      // router.push('/');
-    } catch (error) {
-      console.error('Login error:', error);
-      setErrors({ general: '로그인에 실패했습니다. 다시 시도해주세요.' });
+    } catch (error: any) {
+      console.error('❌ 로그인 에러:', error);
+      setErrors({ general: '로그인 중 오류가 발생했습니다.' });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
         {/* 헤더 */}
         <div className="text-center">
           <Link href="/" className="inline-flex items-center space-x-2 mb-6">
@@ -90,10 +100,12 @@ export default function LoginPage() {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors ${
+                  className={`w-full pl-10 pr-4 py-4 text-base text-gray-900 border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors touch-manipulation placeholder-gray-500 ${
                     errors.email ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="이메일을 입력하세요"
+                  autoComplete="email"
+                  inputMode="email"
                 />
               </div>
               {errors.email && (
@@ -117,15 +129,17 @@ export default function LoginPage() {
                   value={formData.password}
                   onChange={handleInputChange}
                   required
-                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors ${
+                  className={`w-full pl-10 pr-12 py-4 text-base text-gray-900 border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors touch-manipulation placeholder-gray-500 ${
                     errors.password ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="비밀번호를 입력하세요"
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center min-h-[44px] min-w-[44px] justify-center touch-manipulation"
+                  aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -146,15 +160,15 @@ export default function LoginPage() {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 text-orange-500 focus:ring-orange-500 border-gray-300 rounded"
+                  className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-orange-500 focus:ring-orange-500 focus:ring-1 border-gray-300 rounded touch-manipulation"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 cursor-pointer select-none">
                   로그인 상태 유지
                 </label>
               </div>
               <Link 
                 href="/forgot-password" 
-                className="text-sm text-orange-500 hover:text-orange-600 font-medium"
+                className="text-xs sm:text-sm text-orange-500 hover:text-orange-600 font-medium whitespace-nowrap"
               >
                 비밀번호 찾기
               </Link>
@@ -164,10 +178,10 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all ${
+              className={`w-full py-4 px-4 rounded-xl font-semibold text-base text-white transition-all touch-manipulation min-h-[48px] ${
                 isLoading 
                   ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-orange-500 hover:bg-orange-600 transform hover:scale-105'
+                  : 'bg-orange-500 hover:bg-orange-600 active:bg-orange-700 transform hover:scale-[1.02] active:scale-[0.98]'
               }`}
             >
               {isLoading ? (
@@ -181,36 +195,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* 구분선 */}
-          <div className="my-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">또는</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 소셜 로그인 버튼들 */}
-          <div className="space-y-3">
-            <button 
-              type="button"
-              className="w-full py-3 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors flex items-center justify-center"
-            >
-              <img src="/kakao-icon.svg" alt="카카오" className="w-5 h-5 mr-2" />
-              카카오로 로그인
-            </button>
-            
-            <button 
-              type="button"
-              className="w-full py-3 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors flex items-center justify-center"
-            >
-              <img src="/google-icon.svg" alt="구글" className="w-5 h-5 mr-2" />
-              구글로 로그인
-            </button>
-          </div>
         </div>
 
         {/* 회원가입 링크 */}

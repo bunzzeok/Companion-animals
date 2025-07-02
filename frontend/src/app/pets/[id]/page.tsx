@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { petAPI, chatAPI, apiUtils } from '../../../lib/api';
+import { useAuth } from '../../../hooks/useAuth';
 import { 
   Heart, 
   ArrowLeft, 
@@ -72,6 +74,7 @@ interface PetDetail {
 export default function PetDetailPage() {
   const params = useParams();
   const petId = params.id as string;
+  const { user, isAuthenticated } = useAuth();
   
   // State management
   const [pet, setPet] = useState<PetDetail | null>(null);
@@ -91,68 +94,118 @@ export default function PetDetailPage() {
     try {
       setLoading(true);
       
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/pets/${id}`);
-      // const data = await response.json();
+      const response = await petAPI.getPet(id);
       
-      // Mock detailed pet data
-      const mockPet: PetDetail = {
-        _id: id,
-        name: '귀여운 고양이',
-        type: 'cat',
-        breed: '코리안 숏헤어',
-        age: 'adult',
-        gender: 'female',
-        size: 'small',
-        color: '회색 줄무늬',
-        images: ['/placeholder-cat.jpg', '/placeholder-cat2.jpg', '/placeholder-cat3.jpg'],
-        location: {
-          city: '서울특별시',
-          district: '성동구',
-          detailAddress: '왕십리역 근처'
-        },
-        description: '매우 온순하고 사람을 좋아하는 고양이입니다. 다른 고양이들과도 잘 지내며, 아이들이 있는 가정에서도 문제없을 것 같아요. 화장실 훈련이 완벽하게 되어있고, 스크래처 사용법도 알고 있어서 가구를 망가뜨리지 않습니다. 하루 종일 집에 혼자 있어도 문제없이 잘 지내며, 저녁에 주인이 돌아오면 반갑게 맞이해줍니다.',
-        adoptionFee: 0,
-        urgency: 'medium',
-        owner: {
-          id: 'owner1',
-          name: '김분양',
-          profileImage: '/placeholder-user.jpg',
-          rating: 4.8,
-          reviewCount: 12,
-          verifiedStatus: true,
-          responseRate: 95,
-          responseTime: '평균 1시간 이내'
-        },
-        healthInfo: {
-          neutered: true,
-          vaccinated: 'complete',
-          healthStatus: '매우 건강함',
-          medicalHistory: '2024년 11월 종합 건강검진 완료. 특이사항 없음. 기본 예방접종 모두 완료.'
-        },
-        personality: ['친화적', '온순함', '독립적', '조용함'],
-        specialNeeds: '특별한 돌봄이 필요하지 않습니다.',
-        adoptionRequirements: '반려동물 경험이 있으신 분, 마당이나 베란다가 있는 환경을 선호합니다.',
-        views: 156,
-        likesCount: 23,
-        isLiked: false,
-        createdAt: '2024-01-01T10:00:00Z',
-        updatedAt: '2024-01-01T10:00:00Z',
-        status: 'available'
-      };
-      
-      setPet(mockPet);
+      if (apiUtils.isSuccess(response)) {
+        const petData = apiUtils.getData(response);
+        
+        // Convert API data to PetDetail format
+        const petDetail: PetDetail = {
+          _id: petData._id,
+          name: petData.name,
+          type: petData.type,
+          breed: petData.breed,
+          age: petData.age,
+          gender: petData.gender,
+          size: petData.size,
+          color: petData.color,
+          images: petData.images || [],
+          location: petData.location,
+          description: petData.description,
+          adoptionFee: petData.adoptionFee,
+          urgency: petData.urgency,
+          owner: {
+            id: petData.owner._id,
+            name: petData.owner.name,
+            profileImage: petData.owner.profileImage,
+            rating: 4.8, // Default rating if not provided
+            reviewCount: 12, // Default review count
+            verifiedStatus: true, // Default verification status
+            responseRate: 95, // Default response rate
+            responseTime: '평균 1시간 이내' // Default response time
+          },
+          healthInfo: {
+            neutered: petData.isNeutered,
+            vaccinated: petData.isVaccinated ? 'complete' : 'partial',
+            healthStatus: petData.healthStatus || '건강함',
+            medicalHistory: petData.medicalHistory || '의료 기록이 없습니다.'
+          },
+          personality: petData.personality || ['친화적'],
+          specialNeeds: petData.specialNeeds,
+          adoptionRequirements: petData.adoptionRequirements,
+          views: petData.views,
+          likesCount: petData.likesCount || petData.likes?.length || 0,
+          isLiked: petData.isLiked || false,
+          createdAt: petData.createdAt,
+          updatedAt: petData.updatedAt,
+          status: petData.status
+        };
+        
+        setPet(petDetail);
+      } else {
+        console.error('Failed to load pet from API');
+        setPet(null);
+      }
     } catch (error) {
       console.error('Failed to load pet details:', error);
+      setPet(null);
     } finally {
       setLoading(false);
     }
   };
 
   // Handle starting a chat
-  const handleStartChat = () => {
-    if (pet) {
-      window.location.href = `/chat/pet-${pet._id}`;
+  const handleStartChat = async () => {
+    if (!pet || !isAuthenticated) {
+      window.location.href = '/login';
+      return;
+    }
+
+    try {
+      // Create or find existing chat room
+      const response = await chatAPI.createChatRoom({
+        participants: [], // Backend will handle adding the pet owner
+        type: 'private',
+        relatedPet: pet._id
+      });
+      
+      if (apiUtils.isSuccess(response)) {
+        const chatRoom = apiUtils.getData(response);
+        // Redirect to chat page with the created/found room
+        window.location.href = `/chat?room=${chatRoom._id}`;
+      } else {
+        console.error('Failed to create chat room');
+        // Fallback: redirect to general chat page
+        window.location.href = `/chat`;
+      }
+    } catch (error) {
+      console.error('Failed to start chat:', error);
+      // Fallback: redirect to general chat page
+      window.location.href = `/chat`;
+    }
+  };
+
+  // Handle pet like toggle
+  const handleToggleLike = async () => {
+    if (!pet || !isAuthenticated) {
+      window.location.href = '/login';
+      return;
+    }
+
+    try {
+      const response = await petAPI.toggleLike(pet._id);
+      
+      if (apiUtils.isSuccess(response)) {
+        const result = apiUtils.getData(response);
+        
+        setPet(prev => prev ? {
+          ...prev,
+          isLiked: result.liked,
+          likesCount: result.count
+        } : null);
+      }
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
     }
   };
 
@@ -240,22 +293,38 @@ export default function PetDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <Link href="/pets" className="mr-4">
-                <ArrowLeft className="h-6 w-6 text-gray-600 hover:text-gray-800" />
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            {/* Back button and title */}
+            <div className="flex items-center min-w-0">
+              <Link href="/pets" className="mr-2 sm:mr-4 p-2 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center">
+                <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
               </Link>
-              <h1 className="text-xl font-bold text-gray-900">{pet.name}</h1>
+              <Link href="/" className="flex items-center space-x-1 sm:space-x-2">
+                <Heart className="h-6 w-6 sm:h-8 sm:w-8 text-orange-500 flex-shrink-0" />
+                <span className="text-base sm:text-xl font-bold text-gray-900 truncate">
+                  <span className="hidden xs:inline">Companion Animals</span>
+                  <span className="xs:hidden">반려동물</span>
+                </span>
+              </Link>
             </div>
 
+            {/* Action buttons */}
             <div className="flex items-center space-x-2">
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <Share2 className="h-5 w-5 text-gray-600" />
+              <button 
+                onClick={handleToggleLike}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center"
+              >
+                <Heart className={`h-4 w-4 sm:h-5 sm:w-5 ${
+                  pet.isLiked ? 'fill-red-500 text-red-500' : 'text-gray-600'
+                }`} />
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <Flag className="h-5 w-5 text-gray-600" />
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center">
+                <Share2 className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center">
+                <Flag className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
               </button>
             </div>
           </div>
@@ -288,40 +357,36 @@ export default function PetDetailPage() {
                   </span>
                 </div>
 
-                {/* Like button */}
-                <button className="absolute top-4 right-4 p-3 bg-white/80 rounded-full hover:bg-white transition-colors">
-                  <Heart className={`h-5 w-5 ${pet.isLiked ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
-                </button>
               </div>
             </div>
 
             {/* Basic information */}
             <div className="bg-white rounded-2xl p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">기본 정보</h2>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">품종</span>
-                  <p className="font-medium">{pet.breed}</p>
+              <h2 className="text-xl font-bold text-gray-900 mb-6">기본 정보</h2>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <span className="text-gray-700 font-medium text-sm">품종</span>
+                  <p className="font-semibold text-gray-900 text-base">{pet.breed}</p>
                 </div>
-                <div>
-                  <span className="text-gray-500">나이</span>
-                  <p className="font-medium">{getAgeText(pet.age)}</p>
+                <div className="space-y-1">
+                  <span className="text-gray-700 font-medium text-sm">나이</span>
+                  <p className="font-semibold text-gray-900 text-base">{getAgeText(pet.age)}</p>
                 </div>
-                <div>
-                  <span className="text-gray-500">성별</span>
-                  <p className="font-medium">{getGenderText(pet.gender)}</p>
+                <div className="space-y-1">
+                  <span className="text-gray-700 font-medium text-sm">성별</span>
+                  <p className="font-semibold text-gray-900 text-base">{getGenderText(pet.gender)}</p>
                 </div>
-                <div>
-                  <span className="text-gray-500">크기</span>
-                  <p className="font-medium">{getSizeText(pet.size)}</p>
+                <div className="space-y-1">
+                  <span className="text-gray-700 font-medium text-sm">크기</span>
+                  <p className="font-semibold text-gray-900 text-base">{getSizeText(pet.size)}</p>
                 </div>
-                <div>
-                  <span className="text-gray-500">색상</span>
-                  <p className="font-medium">{pet.color}</p>
+                <div className="space-y-1">
+                  <span className="text-gray-700 font-medium text-sm">색상</span>
+                  <p className="font-semibold text-gray-900 text-base">{pet.color}</p>
                 </div>
-                <div>
-                  <span className="text-gray-500">등록일</span>
-                  <p className="font-medium">{formatTimeAgo(pet.createdAt)}</p>
+                <div className="space-y-1">
+                  <span className="text-gray-700 font-medium text-sm">등록일</span>
+                  <p className="font-semibold text-gray-900 text-base">{formatTimeAgo(pet.createdAt)}</p>
                 </div>
               </div>
             </div>
@@ -373,26 +438,26 @@ export default function PetDetailPage() {
             {/* Health information */}
             <div className="bg-white rounded-2xl p-6 shadow-sm">
               <h2 className="text-lg font-bold text-gray-900 mb-4">건강 정보</h2>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">중성화 수술</span>
-                  <span className={`flex items-center ${pet.healthInfo.neutered ? 'text-green-600' : 'text-orange-600'}`}>
+                  <span className="text-gray-700 font-medium">중성화 수술</span>
+                  <span className={`flex items-center font-semibold ${pet.healthInfo.neutered ? 'text-green-600' : 'text-orange-600'}`}>
                     {pet.healthInfo.neutered ? <CheckCircle className="h-4 w-4 mr-1" /> : <AlertTriangle className="h-4 w-4 mr-1" />}
                     {pet.healthInfo.neutered ? '완료' : '미완료'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">예방접종</span>
-                  <span className="text-gray-900">{getVaccinationText(pet.healthInfo.vaccinated)}</span>
+                  <span className="text-gray-700 font-medium">예방접종</span>
+                  <span className="text-gray-900 font-semibold">{getVaccinationText(pet.healthInfo.vaccinated)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">건강 상태</span>
-                  <span className="text-green-600 font-medium">{pet.healthInfo.healthStatus}</span>
+                  <span className="text-gray-700 font-medium">건강 상태</span>
+                  <span className="text-green-600 font-semibold">{pet.healthInfo.healthStatus}</span>
                 </div>
                 {pet.healthInfo.medicalHistory && (
-                  <div className="pt-2 border-t border-gray-200">
-                    <span className="text-gray-600 text-sm">의료 기록</span>
-                    <p className="text-gray-700 text-sm mt-1">{pet.healthInfo.medicalHistory}</p>
+                  <div className="pt-3 border-t border-gray-200">
+                    <span className="text-gray-700 font-medium text-sm">의료 기록</span>
+                    <p className="text-gray-800 text-sm mt-2 leading-relaxed">{pet.healthInfo.medicalHistory}</p>
                   </div>
                 )}
               </div>
@@ -441,14 +506,14 @@ export default function PetDetailPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">응답률</span>
-                  <p className="font-medium">{pet.owner.responseRate}%</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <span className="text-gray-700 font-medium text-sm">응답률</span>
+                  <p className="font-semibold text-gray-900 text-base">{pet.owner.responseRate}%</p>
                 </div>
-                <div>
-                  <span className="text-gray-500">응답시간</span>
-                  <p className="font-medium">{pet.owner.responseTime}</p>
+                <div className="space-y-1">
+                  <span className="text-gray-700 font-medium text-sm">응답시간</span>
+                  <p className="font-semibold text-gray-900 text-base">{pet.owner.responseTime}</p>
                 </div>
               </div>
             </div>

@@ -1,283 +1,220 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { authenticate } = require('../middleware/auth');
+const { ChatRoom, Message } = require('../models/Chat');
+const Pet = require('../models/Pet');
+const User = require('../models/User');
+const { protect } = require('../middleware/auth');
+const { upload } = require('../middleware/upload');
 
 const router = express.Router();
 
-// Mock data for demonstration
-let chatRooms = [
-  {
-    id: 'room1',
-    petId: 'pet1',
-    petName: '귀여운 고양이',
-    petImage: '/placeholder-cat.jpg',
-    participants: ['user1', 'user2'],
-    lastMessage: {
-      content: '언제 만나볼 수 있을까요?',
-      timestamp: new Date(),
-      senderId: 'user2'
-    },
-    unreadCount: { user1: 2, user2: 0 },
-    chatType: 'adoption',
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: 'room2', 
-    petId: 'pet2',
-    petName: '착한 강아지',
-    petImage: '/placeholder-dog.jpg',
-    participants: ['user1', 'user3'],
-    lastMessage: {
-      content: '사진 더 보내주실 수 있나요?',
-      timestamp: new Date(Date.now() - 3600000), // 1 hour ago
-      senderId: 'user3'
-    },
-    unreadCount: { user1: 0, user3: 0 },
-    chatType: 'adoption',
-    createdAt: new Date(Date.now() - 86400000), // 1 day ago
-    updatedAt: new Date(Date.now() - 3600000)
-  }
-];
-
-let messages = [
-  {
-    id: 'msg1',
-    roomId: 'room1',
-    senderId: 'user2',
-    receiverId: 'user1',
-    content: '안녕하세요! 귀여운 고양이에 관심이 있어서 연락드렸어요.',
-    type: 'text',
-    timestamp: new Date(Date.now() - 3600000),
-    read: true
-  },
-  {
-    id: 'msg2',
-    roomId: 'room1',
-    senderId: 'user1',
-    receiverId: 'user2',
-    content: '안녕하세요! 연락 주셔서 감사합니다. 어떤 부분이 궁금하신가요?',
-    type: 'text',
-    timestamp: new Date(Date.now() - 3300000),
-    read: true
-  },
-  {
-    id: 'msg3',
-    roomId: 'room1',
-    senderId: 'user2',
-    receiverId: 'user1',
-    content: '건강상태는 어떤지, 그리고 접종은 완료되었는지 궁금합니다.',
-    type: 'text',
-    timestamp: new Date(Date.now() - 3000000),
-    read: true
-  },
-  {
-    id: 'msg4',
-    roomId: 'room1',
-    senderId: 'user1',
-    receiverId: 'user2',
-    content: '네, 건강해요! 기본 접종은 모두 완료했고 최근 건강검진도 받았습니다.',
-    type: 'text',
-    timestamp: new Date(Date.now() - 2700000),
-    read: true
-  },
-  {
-    id: 'msg5',
-    roomId: 'room1',
-    senderId: 'user2',
-    receiverId: 'user1',
-    content: '언제 만나볼 수 있을까요?',
-    type: 'text',
-    timestamp: new Date(),
-    read: false
-  }
-];
-
-// 채팅방 목록 조회
-router.get('/rooms', authenticate, async (req, res) => {
+// GET /api/chat/rooms - 채팅방 목록 조회
+router.get('/rooms', protect, async (req, res) => {
   try {
-    const userId = req.user._id.toString();
+    const userId = req.user._id;
     
-    // 사용자가 참여한 채팅방 필터링
-    const userChatRooms = chatRooms.filter(room => 
-      room.participants.includes(userId)
-    ).map(room => {
-      // 상대방 정보 추가
-      const otherUserId = room.participants.find(id => id !== userId);
+    // 사용자가 참여한 채팅방 조회
+    const chatRooms = await ChatRoom.findByParticipant(userId);
+    
+    const roomsWithDetails = chatRooms.map(room => {
+      // 현재 사용자가 아닌 다른 참여자 찾기
+      const otherParticipant = room.participants.find(p => 
+        p.user._id.toString() !== userId.toString()
+      );
+      
+      // 현재 사용자의 읽지 않은 메시지 수 계산
+      const userParticipant = room.participants.find(p => 
+        p.user._id.toString() === userId.toString()
+      );
       
       return {
-        id: room.id,
-        petId: room.petId,
-        petName: room.petName,
-        petImage: room.petImage,
-        participantId: otherUserId,
-        participantName: otherUserId === 'user2' ? '김민수' : '이지혜',
-        participantAvatar: '/placeholder-user.jpg',
-        lastMessage: room.lastMessage.content,
-        lastMessageTime: formatTimeAgo(room.lastMessage.timestamp),
-        unreadCount: room.unreadCount[userId] || 0,
-        isOnline: Math.random() > 0.5, // Mock online status
-        chatType: room.chatType,
+        _id: room._id,
+        type: room.type,
+        name: room.name || (room.relatedPet ? room.relatedPet.name : '채팅'),
+        participants: room.participants.map(p => ({
+          _id: p.user._id,
+          name: p.user.name,
+          profileImage: p.user.profileImage,
+          isOnline: false // TODO: implement online status
+        })),
+        relatedPet: room.relatedPet ? {
+          _id: room.relatedPet._id,
+          name: room.relatedPet.name,
+          images: room.relatedPet.images
+        } : null,
+        lastMessage: room.lastMessage ? {
+          content: room.lastMessage.content,
+          sender: room.lastMessage.sender,
+          messageType: room.lastMessage.messageType,
+          createdAt: room.lastMessage.sentAt || room.lastMessage.createdAt
+        } : null,
+        unreadCount: userParticipant ? userParticipant.unreadCount : 0,
+        status: room.status,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt
       };
     });
 
-    // 최근 메시지 순으로 정렬
-    userChatRooms.sort((a, b) => 
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
-
     res.json({
       success: true,
-      data: {
-        rooms: userChatRooms,
-        totalCount: userChatRooms.length
-      }
+      data: roomsWithDetails
     });
 
   } catch (error) {
     console.error('Get chat rooms error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to retrieve chat rooms'
+      message: '채팅방 목록을 가져오는데 실패했습니다.',
+      error: error.message
     });
   }
 });
 
-// 특정 채팅방 정보 조회
-router.get('/rooms/:roomId', authenticate, async (req, res) => {
+// GET /api/chat/rooms/:roomId - 특정 채팅방 정보 조회
+router.get('/rooms/:roomId', protect, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const userId = req.user._id.toString();
+    const userId = req.user._id;
     
-    const room = chatRooms.find(r => r.id === roomId);
-    
+    const room = await ChatRoom.findById(roomId)
+      .populate('participants.user', 'name profileImage')
+      .populate('relatedPet', 'name type breed age size images description location')
+      .populate('relatedAdoption');
+
     if (!room) {
       return res.status(404).json({
         success: false,
-        error: 'Chat room not found'
+        message: '채팅방을 찾을 수 없습니다.'
       });
     }
 
     // 사용자가 해당 채팅방 참여자인지 확인
-    if (!room.participants.includes(userId)) {
+    const isParticipant = room.participants.some(p => 
+      p.user._id.toString() === userId.toString()
+    );
+
+    if (!isParticipant) {
       return res.status(403).json({
         success: false,
-        error: 'Access denied to this chat room'
+        message: '채팅방 접근 권한이 없습니다.'
       });
     }
 
-    const otherUserId = room.participants.find(id => id !== userId);
+    // 다른 참여자 정보
+    const otherParticipant = room.participants.find(p => 
+      p.user._id.toString() !== userId.toString()
+    );
 
     const roomData = {
-      id: room.id,
-      petId: room.petId,
-      petName: room.petName,
-      petImage: room.petImage,
-      participantId: otherUserId,
-      participantName: otherUserId === 'user2' ? '김민수' : '이지혜',
-      participantAvatar: '/placeholder-user.jpg',
-      lastMessage: room.lastMessage.content,
-      lastMessageTime: formatTimeAgo(room.lastMessage.timestamp),
-      unreadCount: room.unreadCount[userId] || 0,
-      isOnline: Math.random() > 0.5,
-      chatType: room.chatType,
-      petInfo: {
-        breed: '코리안 숏헤어',
-        age: '성인 (3세)',
-        location: '성동구, 서울특별시',
-        adoptionFee: 0,
-        status: '분양 가능'
-      }
+      _id: room._id,
+      type: room.type,
+      name: room.name,
+      description: room.description,
+      participants: room.participants.map(p => ({
+        _id: p.user._id,
+        name: p.user.name,
+        profileImage: p.user.profileImage,
+        isOnline: false // TODO: implement online status
+      })),
+      relatedPet: room.relatedPet,
+      relatedAdoption: room.relatedAdoption,
+      lastMessage: room.lastMessage,
+      status: room.status,
+      settings: room.settings,
+      statistics: room.statistics,
+      createdAt: room.createdAt,
+      updatedAt: room.updatedAt
     };
 
     res.json({
       success: true,
-      data: {
-        room: roomData
-      }
+      data: roomData
     });
 
   } catch (error) {
     console.error('Get chat room error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to retrieve chat room'
+      message: '채팅방 정보를 가져오는데 실패했습니다.',
+      error: error.message
     });
   }
 });
 
-// 채팅방 메시지 조회
-router.get('/rooms/:roomId/messages', authenticate, async (req, res) => {
+// GET /api/chat/rooms/:roomId/messages - 채팅방 메시지 조회
+router.get('/rooms/:roomId/messages', protect, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const userId = req.user._id.toString();
+    const userId = req.user._id;
     const { limit = 50, before } = req.query;
 
-    // 채팅방 존재 여부 및 권한 확인
-    const room = chatRooms.find(r => r.id === roomId);
-    if (!room || !room.participants.includes(userId)) {
-      return res.status(404).json({
+    // Validate roomId
+    if (!roomId || roomId === 'undefined' || roomId === 'null') {
+      return res.status(400).json({
         success: false,
-        error: 'Chat room not found or access denied'
+        message: '유효하지 않은 채팅방 ID입니다.'
       });
     }
 
-    // 해당 채팅방의 메시지 필터링
-    let roomMessages = messages.filter(msg => msg.roomId === roomId);
-
-    // 페이지네이션 (before 파라미터 사용)
-    if (before) {
-      const beforeDate = new Date(before);
-      roomMessages = roomMessages.filter(msg => 
-        new Date(msg.timestamp) < beforeDate
-      );
+    // 채팅방 존재 여부 및 권한 확인
+    const room = await ChatRoom.findById(roomId);
+    if (!room) {
+      return res.status(404).json({
+        success: false,
+        message: '채팅방을 찾을 수 없습니다.'
+      });
     }
 
-    // 최신 메시지부터 정렬하고 제한
-    roomMessages.sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    const isParticipant = room.participants.some(p => 
+      p.user._id.toString() === userId.toString()
     );
-    roomMessages = roomMessages.slice(0, parseInt(limit));
 
-    // 메시지를 시간순으로 다시 정렬 (오래된 것부터)
-    roomMessages.sort((a, b) => 
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
+    if (!isParticipant) {
+      return res.status(403).json({
+        success: false,
+        message: '채팅방 접근 권한이 없습니다.'
+      });
+    }
+
+    // 메시지 조회 옵션 설정
+    const options = {
+      limit: parseInt(limit),
+      before: before ? new Date(before) : null
+    };
+
+    const messages = await Message.findByChatRoom(roomId, options);
 
     res.json({
       success: true,
-      data: {
-        messages: roomMessages,
-        hasMore: messages.filter(msg => msg.roomId === roomId).length > roomMessages.length
-      }
+      data: messages
     });
 
   } catch (error) {
     console.error('Get messages error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to retrieve messages'
+      message: '메시지를 가져오는데 실패했습니다.',
+      error: error.message
     });
   }
 });
 
-// 메시지 전송
-router.post('/messages', authenticate, [
-  body('roomId')
+// POST /api/chat/messages - 메시지 전송
+router.post('/messages', protect, upload.array('media', 5), [
+  body('chatRoom')
     .notEmpty()
-    .withMessage('Room ID is required'),
+    .withMessage('Chat room ID is required'),
   
   body('content')
-    .trim()
-    .isLength({ min: 1, max: 1000 })
-    .withMessage('Message content must be between 1 and 1000 characters'),
-  
-  body('type')
     .optional()
-    .isIn(['text', 'image', 'file'])
-    .withMessage('Message type must be text, image, or file')
+    .trim()
+    .isLength({ max: 2000 })
+    .withMessage('Message content cannot exceed 2000 characters'),
+  
+  body('messageType')
+    .optional()
+    .isIn(['text', 'image', 'video', 'file', 'voice', 'location', 'contact'])
+    .withMessage('Invalid message type')
 ], async (req, res) => {
   try {
     // 유효성 검증
@@ -285,263 +222,463 @@ router.post('/messages', authenticate, [
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid input data',
+        message: '입력 데이터가 유효하지 않습니다.',
         details: errors.array()
       });
     }
 
-    const { roomId, content, type = 'text', receiverId } = req.body;
-    const userId = req.user._id.toString();
+    const { chatRoom, content, messageType = 'text', location, contact } = req.body;
+    const userId = req.user._id;
 
-    // 채팅방 존재 여부 및 권한 확인
-    const room = chatRooms.find(r => r.id === roomId);
-    if (!room || !room.participants.includes(userId)) {
-      return res.status(404).json({
+    console.log('📨 Send message request:', {
+      chatRoom,
+      chatRoomType: typeof chatRoom,
+      content: content?.substring(0, 50),
+      messageType,
+      userId,
+      bodyKeys: Object.keys(req.body)
+    });
+
+    // Validate chatRoom ID
+    if (!chatRoom || chatRoom === 'undefined' || chatRoom === 'null') {
+      console.error('❌ Invalid chatRoom ID:', chatRoom);
+      return res.status(400).json({
         success: false,
-        error: 'Chat room not found or access denied'
+        message: '유효하지 않은 채팅방 ID입니다.',
+        debug: { chatRoom, chatRoomType: typeof chatRoom }
       });
     }
 
-    // 수신자 ID 결정 (제공되지 않았다면 채팅방의 다른 참여자)
-    const actualReceiverId = receiverId || room.participants.find(id => id !== userId);
+    // 채팅방 존재 여부 및 권한 확인
+    const room = await ChatRoom.findById(chatRoom);
+    if (!room) {
+      return res.status(404).json({
+        success: false,
+        message: '채팅방을 찾을 수 없습니다.'
+      });
+    }
 
-    // 새 메시지 생성
-    const newMessage = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      roomId,
-      senderId: userId,
-      receiverId: actualReceiverId,
-      content,
-      type,
-      timestamp: new Date(),
-      read: false
+    const isParticipant = room.participants.some(p => 
+      p.user._id.toString() === userId.toString()
+    );
+
+    if (!isParticipant) {
+      return res.status(403).json({
+        success: false,
+        message: '메시지 전송 권한이 없습니다.'
+      });
+    }
+
+    // 메시지 데이터 준비
+    const messageData = {
+      chatRoom,
+      sender: userId,
+      messageType,
+      content
     };
 
-    // 메시지 추가
-    messages.push(newMessage);
+    // 미디어 파일 처리
+    if (req.files && req.files.length > 0) {
+      messageData.media = req.files.map(file => ({
+        type: file.mimetype.startsWith('image/') ? 'image' : 
+              file.mimetype.startsWith('video/') ? 'video' : 
+              file.mimetype.startsWith('audio/') ? 'audio' : 'document',
+        url: file.path,
+        filename: file.originalname,
+        size: file.size,
+        mimeType: file.mimetype
+      }));
+    }
+
+    // 위치 정보 처리
+    if (messageType === 'location' && location) {
+      messageData.location = JSON.parse(location);
+    }
+
+    // 연락처 정보 처리
+    if (messageType === 'contact' && contact) {
+      messageData.contact = JSON.parse(contact);
+    }
+
+    // 메시지 생성
+    const message = await Message.create(messageData);
 
     // 채팅방의 마지막 메시지 업데이트
-    const roomIndex = chatRooms.findIndex(r => r.id === roomId);
-    if (roomIndex !== -1) {
-      chatRooms[roomIndex].lastMessage = {
-        content,
-        timestamp: newMessage.timestamp,
-        senderId: userId
-      };
-      chatRooms[roomIndex].updatedAt = new Date();
-      
-      // 수신자의 읽지 않은 메시지 카운트 증가
-      if (!chatRooms[roomIndex].unreadCount[actualReceiverId]) {
-        chatRooms[roomIndex].unreadCount[actualReceiverId] = 0;
+    await room.updateLastMessage(message);
+
+    // 다른 참여자들의 읽지 않은 메시지 수 증가 (발신자 제외)
+    room.participants.forEach(participant => {
+      if (participant.user.toString() !== userId.toString()) {
+        participant.unreadCount += 1;
       }
-      chatRooms[roomIndex].unreadCount[actualReceiverId]++;
-    }
+    });
+    await room.save();
+
+    // 메시지 populate 후 반환
+    const populatedMessage = await Message.findById(message._id)
+      .populate('sender', 'name profileImage');
 
     res.status(201).json({
       success: true,
-      message: 'Message sent successfully',
-      data: {
-        message: newMessage
-      }
+      data: populatedMessage,
+      message: '메시지가 전송되었습니다.'
     });
-
-    console.log(`✅ Message sent in room ${roomId}: ${userId} -> ${actualReceiverId}`);
 
   } catch (error) {
     console.error('Send message error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to send message'
+      message: '메시지 전송에 실패했습니다.',
+      error: error.message
     });
   }
 });
 
-// 메시지 읽음 처리
-router.put('/messages/:messageId/read', authenticate, async (req, res) => {
+// PUT /api/chat/messages/:messageId/read - 메시지 읽음 처리
+router.put('/messages/:messageId/read', protect, async (req, res) => {
   try {
     const { messageId } = req.params;
-    const userId = req.user._id.toString();
+    const userId = req.user._id;
 
-    const messageIndex = messages.findIndex(msg => 
-      msg.id === messageId && msg.receiverId === userId
-    );
-
-    if (messageIndex === -1) {
+    const message = await Message.findById(messageId);
+    if (!message) {
       return res.status(404).json({
         success: false,
-        error: 'Message not found or access denied'
+        message: '메시지를 찾을 수 없습니다.'
       });
     }
 
     // 메시지를 읽음으로 표시
-    messages[messageIndex].read = true;
+    await message.markAsRead(userId);
 
     res.json({
       success: true,
-      message: 'Message marked as read'
+      message: '메시지를 읽음으로 표시했습니다.'
     });
 
   } catch (error) {
     console.error('Mark message as read error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to mark message as read'
+      message: '메시지 읽음 처리에 실패했습니다.',
+      error: error.message
     });
   }
 });
 
-// 채팅방의 모든 메시지 읽음 처리
-router.put('/rooms/:roomId/read', authenticate, async (req, res) => {
+// PUT /api/chat/rooms/:roomId/read - 채팅방의 모든 메시지 읽음 처리
+router.put('/rooms/:roomId/read', protect, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const userId = req.user._id.toString();
+    const userId = req.user._id;
 
-    // 사용자가 수신자인 해당 채팅방의 모든 메시지를 읽음으로 표시
-    const updatedCount = messages.filter(msg => 
-      msg.roomId === roomId && 
-      msg.receiverId === userId && 
-      !msg.read
-    ).length;
+    const room = await ChatRoom.findById(roomId);
+    if (!room) {
+      return res.status(404).json({
+        success: false,
+        message: '채팅방을 찾을 수 없습니다.'
+      });
+    }
 
-    messages.forEach(msg => {
-      if (msg.roomId === roomId && msg.receiverId === userId) {
-        msg.read = true;
-      }
-    });
+    // 채팅방 참여자 확인
+    const isParticipant = room.participants.some(p => 
+      p.user._id.toString() === userId.toString()
+    );
 
-    // 채팅방의 읽지 않은 메시지 카운트 초기화
-    const roomIndex = chatRooms.findIndex(r => r.id === roomId);
-    if (roomIndex !== -1) {
-      chatRooms[roomIndex].unreadCount[userId] = 0;
+    if (!isParticipant) {
+      return res.status(403).json({
+        success: false,
+        message: '권한이 없습니다.'
+      });
+    }
+
+    // 채팅방의 모든 메시지를 읽음으로 표시
+    await room.markAsRead(userId);
+
+    // Socket.IO를 통해 다른 참여자들에게 읽음 상태 알림
+    const io = req.app.get('io');
+    if (io) {
+      io.to(roomId).emit('room:read_by', {
+        roomId,
+        userId,
+        readAt: new Date()
+      });
     }
 
     res.json({
       success: true,
-      message: `${updatedCount} messages marked as read`
+      message: '모든 메시지를 읽음으로 표시했습니다.'
     });
 
   } catch (error) {
     console.error('Mark room messages as read error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to mark messages as read'
+      message: '메시지 읽음 처리에 실패했습니다.',
+      error: error.message
     });
   }
 });
 
-// 채팅방 생성 또는 조회 (펫 기반)
-router.post('/rooms/create', authenticate, [
-  body('petId')
-    .notEmpty()
-    .withMessage('Pet ID is required'),
+// POST /api/chat/rooms - 채팅방 생성
+router.post('/rooms', protect, [
+  body('type')
+    .isIn(['direct', 'group', 'adoption'])
+    .withMessage('Invalid chat room type'),
   
-  body('petOwnerId')
-    .notEmpty()
-    .withMessage('Pet owner ID is required')
+  body('participantIds')
+    .isArray({ min: 1 })
+    .withMessage('At least one participant is required'),
+  
+  body('petId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid pet ID'),
+  
+  body('adoptionId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid adoption ID')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid input data',
+        message: '입력 데이터가 유효하지 않습니다.',
         details: errors.array()
       });
     }
 
-    const { petId, petOwnerId } = req.body;
-    const userId = req.user._id.toString();
+    const { type, participantIds, petId, adoptionId, name, description } = req.body;
+    const userId = req.user._id;
 
-    // 자기 자신과 채팅방을 만들려고 하는 경우
-    if (userId === petOwnerId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Cannot create chat room with yourself'
-      });
+    // 직접 채팅인 경우 기존 채팅방 확인
+    if (type === 'direct' && participantIds.length === 1) {
+      const otherUserId = participantIds[0];
+      const existingRoom = await ChatRoom.findDirectChat(userId, otherUserId);
+      
+      if (existingRoom) {
+        return res.json({
+          success: true,
+          data: existingRoom,
+          message: '기존 채팅방이 있습니다.'
+        });
+      }
     }
 
-    // 기존 채팅방이 있는지 확인
-    let existingRoom = chatRooms.find(room => 
-      room.petId === petId && 
-      room.participants.includes(userId) && 
-      room.participants.includes(petOwnerId)
-    );
+    // 모든 참여자 배열 (현재 사용자 포함)
+    const allParticipants = [userId, ...participantIds];
 
-    if (existingRoom) {
-      return res.json({
-        success: true,
-        message: 'Chat room already exists',
-        data: {
-          roomId: existingRoom.id,
-          isNew: false
-        }
-      });
-    }
+    // 참여자 정보 생성
+    const participants = allParticipants.map(participantId => ({
+      user: participantId,
+      role: participantId.toString() === userId.toString() ? 'admin' : 'member'
+    }));
 
-    // 새 채팅방 생성
-    const newRoomId = `room-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newRoom = {
-      id: newRoomId,
-      petId,
-      petName: '새로운 분양 동물', // TODO: 실제 펫 정보에서 가져오기
-      petImage: '/placeholder-pet.jpg',
-      participants: [userId, petOwnerId],
-      lastMessage: {
-        content: '채팅이 시작되었습니다.',
-        timestamp: new Date(),
-        senderId: 'system'
-      },
-      unreadCount: { [userId]: 0, [petOwnerId]: 0 },
-      chatType: 'adoption',
-      createdAt: new Date(),
-      updatedAt: new Date()
+    // 채팅방 데이터 준비
+    const roomData = {
+      type,
+      participants,
+      name,
+      description,
+      relatedPet: petId || null,
+      relatedAdoption: adoptionId || null
     };
 
-    chatRooms.push(newRoom);
+    // 채팅방 생성
+    const room = await ChatRoom.create(roomData);
 
-    // 시스템 메시지 추가
-    const systemMessage = {
-      id: `msg-${Date.now()}`,
-      roomId: newRoomId,
-      senderId: 'system',
-      receiverId: null,
-      content: '채팅이 시작되었습니다. 반려동물에 대해 궁금한 점을 물어보세요!',
-      type: 'system',
-      timestamp: new Date(),
-      read: true
-    };
-
-    messages.push(systemMessage);
-
-    res.status(201).json({
-      success: true,
-      message: 'Chat room created successfully',
-      data: {
-        roomId: newRoomId,
-        isNew: true
+    // 시스템 메시지 생성
+    const systemMessage = await Message.create({
+      chatRoom: room._id,
+      sender: userId,
+      messageType: 'system',
+      content: '채팅이 시작되었습니다.',
+      systemMessage: {
+        type: 'room_created',
+        data: { roomId: room._id }
       }
     });
 
-    console.log(`✅ New chat room created: ${newRoomId} for pet ${petId}`);
+    // 채팅방의 마지막 메시지 업데이트
+    await room.updateLastMessage(systemMessage);
+
+    const populatedRoom = await ChatRoom.findById(room._id)
+      .populate('participants.user', 'name profileImage')
+      .populate('relatedPet', 'name type images')
+      .populate('relatedAdoption');
+
+    res.status(201).json({
+      success: true,
+      data: populatedRoom,
+      message: '채팅방이 생성되었습니다.'
+    });
 
   } catch (error) {
     console.error('Create chat room error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create chat room'
+      message: '채팅방 생성에 실패했습니다.',
+      error: error.message
     });
   }
 });
 
-// Helper function to format time ago
-function formatTimeAgo(date) {
-  const now = new Date();
-  const diffInSeconds = Math.floor((now - date) / 1000);
-  
-  if (diffInSeconds < 60) return '방금 전';
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}분 전`;
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}시간 전`;
-  return `${Math.floor(diffInSeconds / 86400)}일 전`;
-}
+// POST /api/chat/rooms/pet/:petId - 펫 기반 채팅방 생성/조회
+router.post('/rooms/pet/:petId', protect, async (req, res) => {
+  try {
+    const { petId } = req.params;
+    const userId = req.user._id;
+
+    // 펫 정보 조회
+    const pet = await Pet.findById(petId).populate('owner');
+    if (!pet) {
+      return res.status(404).json({
+        success: false,
+        message: '펫을 찾을 수 없습니다.'
+      });
+    }
+
+    const ownerId = pet.owner._id;
+
+    // 자기 자신과 채팅방을 만들려고 하는 경우
+    if (userId.toString() === ownerId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: '자신의 펫에는 채팅을 시작할 수 없습니다.'
+      });
+    }
+
+    // 기존 채팅방이 있는지 확인
+    const existingRoom = await ChatRoom.findOne({
+      type: 'adoption',
+      relatedPet: petId,
+      'participants.user': { $all: [userId, ownerId] },
+      status: 'active'
+    });
+
+    if (existingRoom) {
+      return res.json({
+        success: true,
+        data: { roomId: existingRoom._id, isNew: false },
+        message: '기존 채팅방이 있습니다.'
+      });
+    }
+
+    // 새 채팅방 생성
+    const roomData = {
+      type: 'adoption',
+      participants: [
+        { user: userId, role: 'member' },
+        { user: ownerId, role: 'member' }
+      ],
+      relatedPet: petId,
+      name: `${pet.name} 입양 상담`
+    };
+
+    const room = await ChatRoom.create(roomData);
+
+    // 시스템 메시지 생성
+    const systemMessage = await Message.create({
+      chatRoom: room._id,
+      sender: userId,
+      messageType: 'system',
+      content: `${pet.name}에 대한 입양 상담이 시작되었습니다.`,
+      systemMessage: {
+        type: 'room_created',
+        data: { petId, petName: pet.name }
+      }
+    });
+
+    await room.updateLastMessage(systemMessage);
+
+    res.status(201).json({
+      success: true,
+      data: { roomId: room._id, isNew: true },
+      message: '채팅방이 생성되었습니다.'
+    });
+
+  } catch (error) {
+    console.error('Create pet chat room error:', error);
+    res.status(500).json({
+      success: false,
+      message: '채팅방 생성에 실패했습니다.',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/chat/messages/:messageId/reaction - 메시지에 반응 추가/제거
+router.post('/messages/:messageId/reaction', protect, [
+  body('emoji')
+    .notEmpty()
+    .withMessage('Emoji is required')
+], async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({
+        success: false,
+        message: '메시지를 찾을 수 없습니다.'
+      });
+    }
+
+    await message.addReaction(userId, emoji);
+
+    const updatedMessage = await Message.findById(messageId)
+      .populate('sender', 'name profileImage');
+
+    res.json({
+      success: true,
+      data: updatedMessage,
+      message: '반응이 추가/제거되었습니다.'
+    });
+
+  } catch (error) {
+    console.error('Add reaction error:', error);
+    res.status(500).json({
+      success: false,
+      message: '반응 처리에 실패했습니다.',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/chat/rooms/:roomId - 채팅방 나가기/삭제
+router.delete('/rooms/:roomId', protect, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const userId = req.user._id;
+
+    const room = await ChatRoom.findById(roomId);
+    if (!room) {
+      return res.status(404).json({
+        success: false,
+        message: '채팅방을 찾을 수 없습니다.'
+      });
+    }
+
+    // 참여자에서 사용자 제거
+    await room.removeParticipant(userId);
+
+    res.json({
+      success: true,
+      message: '채팅방에서 나왔습니다.'
+    });
+
+  } catch (error) {
+    console.error('Leave chat room error:', error);
+    res.status(500).json({
+      success: false,
+      message: '채팅방 나가기에 실패했습니다.',
+      error: error.message
+    });
+  }
+});
 
 module.exports = router;

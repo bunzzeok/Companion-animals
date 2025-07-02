@@ -1,8 +1,14 @@
+'use client'
+
 import Link from 'next/link';
+import { useCallback } from 'react';
 import { Home, ArrowLeft, Heart, Search } from 'lucide-react';
 
 // 404 페이지 컴포넌트 - 당근마켓 스타일
 export default function NotFound() {
+  const handleGoBack = useCallback(() => {
+    window.history.back();
+  }, []);
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* 헤더 */}
@@ -67,7 +73,7 @@ export default function NotFound() {
             </Link>
             
             <button 
-              onClick={() => window.history.back()}
+              onClick={handleGoBack}
               className="w-full text-gray-500 hover:text-gray-700 px-8 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
             >
               <ArrowLeft className="h-5 w-5" />
